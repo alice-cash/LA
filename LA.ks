@@ -10,7 +10,7 @@ run LA_CraftSettings.
 
 // ==========vvv Launch paramaters vvv==========
 GLOBAL MyHEADING to 90.   //Ship launch heading
-GLOBAL MYORBITAP to 100000. //Not the final aptosis but shitty math
+GLOBAL MYORBITAP to 170000.
 GLOBAL MYORBITPE to 160000.
 
 // ==========^^^ Launch paramaters ^^^==========
@@ -98,3 +98,4 @@ UNTIL SHIP:PERIAPSIS > 140000 {
   WAIT 0.25.
 
 }
+SET SHIP:CONTROL:PILOTMAINTHROTTLE TO 0.

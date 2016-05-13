@@ -29,6 +29,7 @@ DECLARE FUNCTION FirstStageLogic {
   LOCAL lspd to LOW_ALTITUDE_SPEED.
   LOCAL hiang to ANGLE_STARTTURN.
   LOCAL loturn to LOW_ALTITUDE_TURN.
+  LOCAL turnrate to 0.5.
 
   IF ALTITUDE < LOW_ALTITUDE {
     print "Low Alt.".
@@ -55,6 +56,7 @@ DECLARE FUNCTION FirstStageLogic {
     SET lspd to SPACE_ALTITUDE_SPEED.
     SET hiang to ANGLE_STARTTURN.
     SET loturn to -10.
+    SET turnrate to 1.
   }
 
   //Calculate Accelleration
@@ -71,12 +73,30 @@ SET lspd to Constant:DegToRad * (arctan(ALTITUDE/30000))*78203.
 
 ///SET lspd to Constant:DegToRad * (arctan(ALTITUDE/40000))*142823.
 
-  IF SHIP:APOAPSIS > MYORBITAP {
+  IF SHIP:APOAPSIS > 100000 {
     print "Target Get Alt.".
     SET lspd to MYORBITAP.
     SET hiang to ANGLE_STARTTURN.
-    SET loturn to 5.
+    SET turnrate to 2.
+    if SHIP:VERTICALSPEED > 0 {
+      SET loturn to -15.
+    } else {
+      SET loturn to 15.
+    }
 
+  }
+
+  IF ABS(SHIP:APOAPSIS - MYORBITAP) < 1000 {
+    print "Target Get Alt.".
+    SET lspd to MYORBITAP.
+    SET turnrate to 0.
+    if SHIP:VERTICALSPEED > 0 {
+      SET hiang to 0.
+      SET loturn to 0.
+    } else {
+      SET hiang to 10.
+    SET loturn to 10.
+    }
   }
 
 
@@ -90,7 +110,7 @@ SET lspd to Constant:DegToRad * (arctan(ALTITUDE/30000))*78203.
       //More Throttle, less turn
       if MYTHROTTLE >= 0.9 {
         //roll up as throttle is at 0.9
-        GLOBAL ROLLANGLE to ROLLANGLE + 0.50.
+        GLOBAL ROLLANGLE to ROLLANGLE + turnrate.
         if ROLLANGLE > hiang {
           GLOBAL ROLLANGLE to hiang.
           GLOBAL MYTHROTTLE to 1.
@@ -101,7 +121,7 @@ SET lspd to Constant:DegToRad * (arctan(ALTITUDE/30000))*78203.
       //If SHIP:VERTICALSPEED < LOW_ALTITUDE_SPEED
     } else {
 
-      GLOBAL ROLLANGLE to ROLLANGLE - 0.50.
+      GLOBAL ROLLANGLE to ROLLANGLE - turnrate.
       if ROLLANGLE < loturn {
         GLOBAL ROLLANGLE to loturn.
         //GLOBAL MYTHROTTLE to MYTHROTTLE - 0.05.
