@@ -12,122 +12,126 @@ DECLARE FUNCTION PITCH {
 
 
 DECLARE FUNCTION DoLogic {
-  //if BoostBDone = false {
+  if BoostBDone = false {
     FirstStageLogic().
-  //}
+  } else {
+    SecondStageLogic().
+  }
   //Second Stage
 }
-DECLARE FUNCTION FirstStageLogic {
-  // If Throttle > 0.9 and vertical speed < target, Roll Up
-  // If Throttle < 0.9 and vertical speed < target, Throttle Up
-  // If vertical speed > target, Roll down
+DECLARE FUNCTION SecondStageLogic {
 
-  //Edge cases due to roll limits:
-  //Cannot roll up: Throttle up
-  //Cannot roll down: Throttle down
+  LOCAL Radius is Earth:Radius + ALTITUDE.
+  // Earth:Mass
+  Local StgGravParam is Earth:Mass * constant:G.
+  Local AccCent is  Ship:Velocity:orbit:Mag^2 / Radius.
+  Local Grav is ( StgGravParam / Radius ^2).
+  Local EquGrav is Grav - AccCent.
+  Local Ge is AccCent - EquGrav.
+  Local cTWR to SHIP:MAXTHRUST / (SHIP:MASS * EquGrav).
+  Local Vvert is SHIP:VERTICALSPEED.
+  Local B is 0.15.
+  Local Vlimit is 2.
+  Local Vtol is 4.
 
-  LOCAL lspd to LOW_ALTITUDE_SPEED.
-  LOCAL hiang to ANGLE_STARTTURN.
-  LOCAL loturn to LOW_ALTITUDE_TURN.
-  LOCAL turnrate to 0.5.
+  //If we are above or below  we want to inject some verticle Accelleration
+  IF ABS(SHIP:APOAPSIS - MYORBITAP) < 1000 {
+    if(SHIP:APOAPSIS > MYORBITAP)  {
+      SET Vvert to Vvert - 5.
+    } else {
+      SET Vvert to Vvert + 5.
+    }
+  }
 
-  IF ALTITUDE < LOW_ALTITUDE {
-    print "Low Alt.".
-    SET lspd to LOW_ALTITUDE_SPEED.
-    SET hiang to ANGLE_STARTTURN.
-    SET loturn to LOW_ALTITUDE_TURN.
+  Local AVertTgt is MMAX(Vlimit,VACCTGT(B,Vvert,Vlimit,Vtol)).
 
-  } //  IF ALTITUDE < LOW_ALTITUDE
+  Local Angle is (AVertTgt-Ge)/(cTWR*Grav).
+  Local FinalAngle is 0.
+  Local AngleLimit is 20.
 
-  IF ALTITUDE >= LOW_ALTITUDE and ALTITUDE < HIGH_ALTITUDE {
-    //High altitude, focus on going fast sizeways while sitll going up
-    print "High Alt.".
-    SET lspd to HIGH_ALTITUDE_SPEED.
-    SET hiang to ANGLE_STARTTURN.
-    SET loturn to 0.
+
+  if ABS(Angle) < 1  {
+    set FinalAngle to MMAX(AngleLimit,arcsin(Angle)).
+  } else {
+    if AVertTgt - Ge < 0 {
+        set FinalAngle to -AngleLimit.
+    } else {
+        set FinalAngle to AngleLimit.
+    }
+  }
+  GLOBAL ROLLANGLE to FinalAngle.
 
 }
 
-  IF ALTITUDE >= HIGH_ALTITUDE {
-    print "Space Alt.".
-    //Space, Focus on going sideways very fast.
-    //If AP is below target roll up
-    //If AP is above target roll down
-    SET lspd to SPACE_ALTITUDE_SPEED.
-    SET hiang to ANGLE_STARTTURN.
-    SET loturn to -10.
-    SET turnrate to 1.
+DECLARE FUNCTION VACCTGT {
+  DECLARE PARAMETER B.
+  DECLARE PARAMETER Vvert.
+  DECLARE PARAMETER Vmax.
+  DECLARE PARAMETER Vtol.
+  return (1-B)*Vmax*(-Vvert/Vtol)^3 + B*Vmax*(-Vvert/Vtol).
+}
+
+DECLARE FUNCTION MMAX {
+  DECLARE PARAMETER RANGE.
+  DECLARE PARAMETER X.
+  return MINMAX(-RANGE,RANGE, X).
+}
+
+DECLARE FUNCTION MINMAX {
+  DECLARE PARAMETER MIN.
+  DECLARE PARAMETER MAX.
+  DECLARE PARAMETER X.
+  if X > MAX { return MAX. }
+  if X < MIN { return MIN. }
+  return X.
+}
+
+DECLARE FUNCTION FirstStageLogic {
+
+  LOCAL Radius is Earth:Radius + ALTITUDE.
+  // Earth:Mass
+  Local StgGravParam is Earth:Mass * constant:G.
+  Local AccCent is  Ship:Velocity:orbit:Mag^2 / Radius.
+  Local Grav is ( StgGravParam / Radius ^2).
+  Local EquGrav is Grav - AccCent.
+  Local cTWR to SHIP:MAXTHRUST / (SHIP:MASS * EquGrav).
+  Local Ge is AccCent - EquGrav.
+  if cTWR = 0 { return. } //Math breaks down so just skip
+
+  //Our goal is to maintain ~20m/s^2 up
+  Local Angle is (20-Ge)/(cTWR*Grav).
+
+  Local AddAngle is 0.
+
+  if ABS(Angle) > 1 {
+    if (Angle < 1) {
+      //I really have no idea, its telling us to go down?
+      //Should not happen as above accelleration is contant.
+      print "SCRIPT IS SAYING TO POINT OUR NOSE DOWN DURING MAIN STAGE ASCENT".
+    }
+    //We just want to set it to 80 to go up.
+    GLOBAL ROLLANGLE to 80.
+    return.
   }
 
-  //Calculate Accelleration
-  //Local Accelleration is SHIP:VERTICALSPEED - MYLASTSPEED.
-  //GLOBAL MYLASTSPEED is SHIP:VERTICALSPEED.
-  //print "Accelleration " + Accelleration.
-//y=\left(\frac{x-160000}{6000}\right)^2
-//\log \left(\frac{x}{100}\right)\cdot 30000+100000
-//Test hax
+  set FinalAngle to arcsin(Angle).
 
-//SET lspd to Constant:DegToRad * (arctan((ALTITUDE+10000)/30000))*80999.
-//Close - Orbitor 3
-SET lspd to Constant:DegToRad * (arctan(ALTITUDE/30000))*78203.
 
-///SET lspd to Constant:DegToRad * (arctan(ALTITUDE/40000))*142823.
+  //Ship Prograde
+  LOCAL surfPrograde is 90 - VANG(SHIP:SRFPROGRADE:VECTOR, UP:VECTOR).
 
-  IF SHIP:APOAPSIS > 100000 {
-    print "Target Get Alt.".
-    SET lspd to MYORBITAP.
-    SET hiang to ANGLE_STARTTURN.
-    SET turnrate to 2.
-    if SHIP:VERTICALSPEED > 0 {
-      SET loturn to -15.
-    } else {
-      SET loturn to 15.
-    }
-
+  //We don't want to be outside 5 degrees from prograde.
+  if abs(FinalAngle - surfPrograde) > 5 {
+    if (FinalAngle > surfPrograde ) set FinalAngle to surfPrograde + 10.
+    if (FinalAngle < surfPrograde ) set FinalAngle to surfPrograde - 10.
   }
 
-  IF ABS(SHIP:APOAPSIS - MYORBITAP) < 1000 {
-    print "Target Get Alt.".
-    SET lspd to MYORBITAP.
-    SET turnrate to 0.
-    if SHIP:VERTICALSPEED > 0 {
-      SET hiang to 0.
-      SET loturn to 0.
-    } else {
-      SET hiang to 10.
-    SET loturn to 10.
-    }
+  //Final Sanity check
+  if FinalAngle < 0 {
+    SET FinalAngle to 0.
   }
 
+  GLOBAL ROLLANGLE to FinalAngle.
 
-  Print "Altitude " + ALTITUDE.
-  Print "APOAPSIS " + SHIP:APOAPSIS.
-  Print "Target " + lspd.
 
-    //Low altitude, Focus on very slow rolls and going up fast.
-    //If SHIP:VERTICALSPEED < lspd {
-    If SHIP:APOAPSIS < lspd {
-      //More Throttle, less turn
-      if MYTHROTTLE >= 0.9 {
-        //roll up as throttle is at 0.9
-        GLOBAL ROLLANGLE to ROLLANGLE + turnrate.
-        if ROLLANGLE > hiang {
-          GLOBAL ROLLANGLE to hiang.
-          GLOBAL MYTHROTTLE to 1.
-        }
-      } else {
-        GLOBAL MYTHROTTLE to MYTHROTTLE + 0.1.
-      }
-      //If SHIP:VERTICALSPEED < LOW_ALTITUDE_SPEED
-    } else {
-
-      GLOBAL ROLLANGLE to ROLLANGLE - turnrate.
-      if ROLLANGLE < loturn {
-        GLOBAL ROLLANGLE to loturn.
-        //GLOBAL MYTHROTTLE to MYTHROTTLE - 0.05.
-        if MYTHROTTLE < MinThrottle  {
-          //GLOBAL MYTHROTTLE TO MinThrottle.
-        }
-      }
-    }
 }
