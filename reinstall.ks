@@ -1,3 +1,3 @@
 Print "Reinstalling Launch Aplha.".
-COPY install FROM ARCHIVE.
-run install.
+Switch to ARCHIVE.
+run boot_LA.
