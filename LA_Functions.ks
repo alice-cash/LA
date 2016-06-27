@@ -6,8 +6,11 @@
 Global lName to "Launch Alpha".
 Global lVersion to 0.1.
 
+
+
 Global THROTTLEROLL_LASTTICK to Time:SECONDS.
 Global DEBUG_LASTTICK to Time:SECONDS.
+
 
 //Main program for Launch Alpha. This runs a loop to execute launch functions.
 Declare Function RunLaunchAlpha {
@@ -54,7 +57,7 @@ Declare Function RunLaunchAlpha {
         Set MAXQ to Ship:Q.
       }
     } else if MYTHROTTLE < 1 {
-      THROTTLEROLL(5). //Roll the throttle up 10% every 5 seconds
+      THROTTLEROLL(5). //Roll the throttle up 2% every 5 seconds
     }
 
     CheckStage().
@@ -73,10 +76,10 @@ Declare Function RunLaunchAlpha {
 // To be called each physics frame/
 Declare Function THROTTLEROLL {
   Declare Parameter N.
-  //Roll up the throttle 10% each N seconds
+  //Roll up the throttle 2% each N seconds
   if Time:SECONDS > THROTTLEROLL_LASTTICK + N {
     Set THROTTLEROLL_LASTTICK to Time:SECONDS.
-    Set MYTHROTTLE to MYTHROTTLE + 0.1.
+    Set MYTHROTTLE to MYTHROTTLE + 0.02.
     if MYTHROTTLE > 1 {
       Set MYTHROTTLE to 1.
     }
@@ -146,13 +149,14 @@ Declare Function GetCurrentThrust {
 
 // Execute first stage steering logic.
 Declare Function FirstStageLogic {
-  Local Radius is Earth:Radius + ALTITUDE.
-  Local StgGravParam is Earth:Mass * constant:G.
-  Local AccCent is  Ship:Velocity:orbit:Mag^2 / Radius.
-  Local Grav is ( StgGravParam / Radius ^2).
-  Local EquGrav is Grav - AccCent.
-  Local cTWR to GetCurrentThrust() / (SHIP:MASS * EquGrav).
-  Local Ge is EquGrav - AccCent.
+  Local Radius is PLANET_RADIUS + ALTITUDE.
+  Local StgGravParam is PLANET_MASS * constant:G.
+  Local AccCent is  abs(SHIP:VERTICALSPEED^2 - Ship:Velocity:orbit:Mag^2) / Radius.
+  Local Grav is StgGravParam / Radius ^2.
+  Local Ge is AccCent-Grav.
+  Local Weight is constant:G * ((PLANET_MASS * SHIP:MASS)/Radius^2).
+  Local cTWR to GetCurrentThrust() / Weight.
+
   Local DebugTick is false.
   if Time:SECONDS > DEBUG_LASTTICK + 1 {
     set DebugTick to true.
@@ -166,7 +170,9 @@ Declare Function FirstStageLogic {
     Print "                 StgGravParam: " + StgGravParam.
     Print "                      AccCent: " + AccCent.
     Print "                         Grav: " + Grav.
-    Print "                      EquGrav: " + EquGrav.
+    Print "                       Thrust: " + GetCurrentThrust().
+    Print "                         MASS: " + SHIP:MASS.
+    Print "                       Weight: " + Weight.
     Print "                         cTWR: " + cTWR.
     Print "                           Ge: " + Ge.
   }
@@ -178,17 +184,27 @@ Declare Function FirstStageLogic {
     return.
   } //Math breaks down so just skip
 
-  Local TargetAcc is 28.
+  Local TargetAcc is GetFirstStageAccelleration().
 
-  if(SHIP:APOAPSIS > 100000) {
-    Set TargetAcc to 2.
+  if(SHIP:APOAPSIS > MYORBITAP-1000) {
+    Set TargetAcc to 0.
   }
 
-  //Our goal is to maintain ~28m/s^2 up
-  Local Angle is (TargetAcc-Ge)/(cTWR*Grav).
+  if(TargetAcc-Ge < 0) {
+    Set TargetAcc to Ge.
+  }
+
+  Local Angle is (TargetAcc+Ge)/(cTWR*Grav).
 
   Local AddAngle is 0.
 
+  if DebugTick {
+    Print "               (TargetAcc+Ge): " + (TargetAcc+Ge).
+    Print "                  (cTWR*Grav): " + (cTWR*Grav).
+    Print "                        Angle: " + Angle.
+    Print "                        Angle: " + Angle.
+    Print "                    TargetAcc: " + TargetAcc.
+  }
   if ABS(Angle) > 1 {
     if (Angle < 1) {
       //I really have no idea, its telling us to go down?
@@ -197,7 +213,7 @@ Declare Function FirstStageLogic {
     }
     //We just want to Set it to 80 to go up.
     if DebugTick {
-      Print "              Our current goal: GO UP!" .
+      Print "              Our current goal: GO UP faster!" .
       Print "============================================".
     }
     Global ROLLANGLE to 80.
@@ -213,12 +229,13 @@ Declare Function FirstStageLogic {
     Print "                         Angle: " + Angle.
     Print "                    FinalAngle: " + FinalAngle.
     Print "                  surfPrograde: " + surfPrograde.
+    Print "                        aVert: " + ((ge)+(cTWR*Grav*sin(surfPrograde))).
   }
   //We don't want to be outside 5 degrees from prograde.
   //Consider ajusting TWR / Throttle limits
-  if abs(FinalAngle - surfPrograde) > 5 {
-    if (FinalAngle > surfPrograde ) Set FinalAngle to surfPrograde + 5.
-    if (FinalAngle < surfPrograde ) Set FinalAngle to surfPrograde - 5.
+  if abs(FinalAngle - surfPrograde) > Stage1MaxAOT {
+    if (FinalAngle > surfPrograde ) Set FinalAngle to surfPrograde + Stage1MaxAOT.
+    if (FinalAngle < surfPrograde ) Set FinalAngle to surfPrograde - Stage1MaxAOT.
   }
 
   //Final Sanity check
@@ -229,7 +246,7 @@ Declare Function FirstStageLogic {
     Print "abs(FinalAngle - surfPrograde): " + abs(FinalAngle - surfPrograde).
     Print "                    FinalAngle: " + FinalAngle.
     Print "============================================".
-    if abs(FinalAngle - surfPrograde) = 5 {
+    if abs(FinalAngle - surfPrograde) = Stage1MaxAOT {
       if (FinalAngle > surfPrograde ) Set DEBUG_goal to "More Height".
       if (FinalAngle < surfPrograde ) Set DEBUG_goal to "Less Height".
     } else {
@@ -243,17 +260,17 @@ Declare Function FirstStageLogic {
 
 // Execute second stage steering logic
 Declare Function SecondStageLogic {
-  Local Radius is Earth:Radius + ALTITUDE.
-  Local StgGravParam is Earth:Mass * constant:G.
-  Local AccCent is  Ship:Velocity:orbit:Mag^2 / Radius.
-  Local Grav is ( StgGravParam / Radius ^2).
-  Local EquGrav is Grav - AccCent.
-  Local cTWR to GetCurrentThrust() / (SHIP:MASS * EquGrav).
-  Local Ge is EquGrav - AccCent.
+  Local Radius is PLANET_RADIUS + ALTITUDE.
+  Local StgGravParam is PLANET_MASS * constant:G.
+  Local AccCent is  abs(SHIP:VERTICALSPEED^2 - Ship:Velocity:orbit:Mag^2) / Radius.
+  Local Grav is StgGravParam / Radius ^2.
+  Local Ge is AccCent-Grav.
+  Local Weight is constant:G * ((PLANET_MASS * SHIP:MASS)/Radius^2).
+  Local cTWR to GetCurrentThrust() / Weight.
   Local Vvert is SHIP:VERTICALSPEED.
   Local B is 0.15.
   Local Vlimit is 5. //limit of 5m/s^2 of accelleration up or down
-  Local Vtol is 20. //Velicity tollerance, Within this the accelleration slopes
+  Local Vtol is 2000. //Velicity tollerance, Within this the accelleration slopes
 
   Local DebugTick is false.
   if Time:SECONDS > DEBUG_LASTTICK + 1 {
@@ -267,7 +284,9 @@ Declare Function SecondStageLogic {
     Print "                 StgGravParam: " + StgGravParam.
     Print "                      AccCent: " + AccCent.
     Print "                         Grav: " + Grav.
-    Print "                      EquGrav: " + EquGrav.
+    Print "                       Thrust: " + GetCurrentThrust().
+    Print "                         MASS: " + SHIP:MASS.
+    Print "                       Weight: " + Weight.
     Print "                         cTWR: " + cTWR.
     Print "                           Ge: " + Ge.
     Print "                        Vvert: " + Vvert.
@@ -281,33 +300,42 @@ Declare Function SecondStageLogic {
   } //Math breaks down so just skip
 
   //If we are above or below  we want to inject some verticle Accelleration
-  IF ABS(SHIP:APOAPSIS - MYORBITAP) > 1000 {
-    if(SHIP:APOAPSIS > MYORBITAP)  {
-      Set Vvert to Vvert - 10. //Act like we are deaccellerating and tilt up
-      if DebugTick { Print "              VERTICAL MODIFIED: -10m/s" . }
-    } else {
-      Set Vvert to Vvert + 10. //Act like we are accellerating and tilt down
-      if DebugTick { Print "              VERTICAL MODIFIED: +10m/s" . }
-    }
-  }
-
   Local AVertTgt is VACCTGT(B,Vvert,Vlimit,Vtol).
 
-  Local Angle is (AVertTgt-Ge)/(cTWR*Grav).
-  Local FinalAngle is 0.
-  Local AngleLimit is 20.
+  IF ABS(SHIP:APOAPSIS - MYORBITAP) > 1000 {
+    if(SHIP:APOAPSIS > MYORBITAP)  {
+      Set AVertTgt to AVertTgt - 5.
+      if DebugTick { Print "              VERTICAL MODIFIED: -5m/s^2" . }
+    } else {
+      Set AVertTgt to AVertTgt + 5.
+      if DebugTick { Print "              VERTICAL MODIFIED: +5m/s^2" . }
+    }
+  } else {
+    set AVertTgt to 0.
+  }
+
+
+  Local Angle is (AVertTgt+Ge)/(cTWR*Grav).
+
+  Local AddAngle is 0.
+  Local surfPrograde is 90 - VANG(SHIP:SRFPROGRADE:VECTOR, UP:VECTOR).
 
   if DebugTick {
-    Print "                Vvert(Modified): " + Vvert.
-    Print "                      AVertTgt: " + AVertTgt.
-    Print "                         Angle: " + Angle.
+    Print "                (AVertTgt+Ge): " + (AVertTgt+Ge).
+    Print "                  (cTWR*Grav): " + (cTWR*Grav).
+    Print "                        Angle: " + Angle.
+    Print "                        Angle: " + Angle.
+    Print "                     AVertTgt: " + AVertTgt.
+    Print "                        aVert: " + ((ge)+(cTWR*Grav*sin(surfPrograde))).
   }
+  Local FinalAngle is 0.
+  Local AngleLimit is 20.
 
   if ABS(Angle) < 1  {
     Set FinalAngle to MMAX(AngleLimit,arcsin(Angle)).
   } else {
     if AVertTgt - Ge < 0 {
-        Set FinalAngle to -AngleLimit.
+        Set FinalAngle to 0.
     } else {
         Set FinalAngle to AngleLimit.
     }

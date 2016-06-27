@@ -15,7 +15,8 @@ GLOBAL STAGECDone to false.
 //Engine will return to 100% after MaxQ. Ensure your TWR is OK at this level
 //Also ensure your engine can throttle this far down. Some mod conditions
 //may set a minimum throttle limit.
-Global Stage1MinThrottle to 0.7.
+Global Stage1MinThrottle to 1.
+Global Stage1MaxAOT to 10.
 
 Global CheckStageTiming to Time:SECONDS.
 Global StagingLevel to 0.
@@ -24,22 +25,33 @@ Global StageDelay to 0.
 
 Declare Function LaunchSequence {
   //Fire the SRBs.
+  WAIT 1.
   Print "Main Engine Firing.".
   STAGE.
-  WAIT 1.
+  WAIT 1. //engine startup.
   Print "RELEASE.".
   //Fire Boosters and release clamps
   STAGE.
 }
 
+Declare Function GetFirstStageAccelleration {
+  if not STAGEADone and not DoingStaging {
+    return 30.
+  } else if not STAGEADone {
+    return 25.
+  } else {
+    return 10.
+  }
+}
+
 //SRB
-//Declare Function StagingA {
-//  // 2 Second Delay
-//  if Time:SECONDS > CheckStageTiming + StageDelay {
-//    STAGE. //Decouple SRB
-//    set STAGEADone to true.
-//    set DoingStaging to false.
-//  }
+Declare Function StagingA {
+  // 2 Second Delay
+  if Time:SECONDS > CheckStageTiming + StageDelay {
+    STAGE. //Decouple SRB
+    set STAGEADone to true.
+    set DoingStaging to false.
+  }
 }// Function StagingA
 
 //First Stage
@@ -51,12 +63,15 @@ Declare Function StagingB {
       PRINT "First Stage Seperation".
       STAGE.
       set StagingLevel to 1.
-      set StageDelay to 10. //10 second wait before firing next step.
+      set StageDelay to 2. //1 second wait before firing next step.
       set CheckStageTiming to Time:SECONDS.
-      rcs on.
-      PRINT "RCS On".
+
       return.
     } else if StagingLevel = 1 {
+      //wait until vertical speed < 200m/s
+      //if SHIP:VERTICALSPEED > 400 { return. }
+      rcs on.
+      PRINT "RCS On".
       SET SHIP:CONTROL:FORE TO 1. //Activate RCS to set utilage
       set StagingLevel to 2.
       set StageDelay to 1. //1 second delay before firing next step.
@@ -98,7 +113,7 @@ Declare Function StagingC {
 Declare Function CheckStage {
   if DoingStaging {
     if not STAGEADone {
-    //  StagingA().
+      StagingA().
     } else if not STAGEBDone {
       StagingB().
     } else if not STAGECDone {
@@ -107,10 +122,9 @@ Declare Function CheckStage {
   } else {
     if not STAGEADone {
       if STAGEA:FLAMEOUT {
-      //  set CheckStageTiming to Time:SECONDS.
-      //  set DoingStaging to true.
-      //  set StageDelay to 2.
-      Stage.
+        set CheckStageTiming to Time:SECONDS.
+        set DoingStaging to true.
+        set StageDelay to 0.
       }
     } else if not STAGEBDone {
       if STAGEB:FLAMEOUT {

@@ -8,6 +8,12 @@ run LA_CraftSettings.
 CLEARSCREEN.
 Print lName + " " + lVersion. " Running!".
 
+// ==========vvv Planet paramaters vvv==========
+GLOBAL PLANET to Body("Earth").
+//GLOBAL PLANET to Body("Kerbin").
+GLOBAL PLANET_RADIUS to PLANET:Radius.
+GLOBAL PLANET_MASS to PLANET:Mass.
+// ==========^^^ Planet paramaters ^^^==========
 
 // ==========vvv Launch paramaters vvv==========
 GLOBAL MyHEADING to 90.   //Ship launch heading
