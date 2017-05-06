@@ -2,7 +2,8 @@
 
 //Initilize Libraries
 run LA_Functions.
-run LA_CraftSettings.
+run LA_CraftSettings_2stage.
+//run LA_CraftSettings_3stage.
 
 //First, we'll clear the terminal screen to make it look nice
 CLEARSCREEN.
@@ -17,8 +18,8 @@ GLOBAL PLANET_MASS to PLANET:Mass.
 
 // ==========vvv Launch paramaters vvv==========
 GLOBAL MyHEADING to 90.   //Ship launch heading
-GLOBAL MYORBITAP to 170000.
-GLOBAL MYORBITPE to 160000.
+GLOBAL MYORBITAP to 210000.
+GLOBAL MYORBITPE to 180000.
 // ==========^^^ Launch paramaters ^^^==========
 
 // ==========vvv Static paramaters vvv==========
