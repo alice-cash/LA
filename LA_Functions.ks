@@ -284,9 +284,7 @@ Declare Function FirstStageLogic {
 
   set TargetAcc to GetFirstStageAccelleration().
 
-  //Our goal is to maintain ~28m/s^2 up
   set Angle to (TargetAcc/(abs(GetCurrentThrust() - Weight) / SHIP:MASS )).
-  //set Angle to (TargetAcc+Ge)/(cTWR*EquGrav).
 
   set AddAngle to 0.
 
@@ -371,7 +369,6 @@ Declare Function SecondStageLogic {
   }
 
   set Angle to (TargetAcc/(abs(GetCurrentThrust() - Weight) / SHIP:MASS )).
-  //set Angle to (TargetAcc+abs(Ge))/(cTWR*EquGrav).
 
   set FinalAngle to 0.
   set AngleLimit to 20.
